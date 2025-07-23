@@ -1,0 +1,4 @@
+g++ -std=c++11 game.cpp board.cpp movegenerator.cpp movetables.cpp search.cpp evaluation.cpp engine.cpp -o ../../backend/engine/engine
+
+
+g++ -std=c++11 game.cpp board.cpp movegenerator.cpp movetables.cpp perft.cpp -o perft
