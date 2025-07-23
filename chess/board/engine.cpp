@@ -28,14 +28,17 @@ std::string getRandomMove(const std::string& fen) {
 
 std::string getBestMove(const std::string& fen) {
     Game game(fen);
-    int bestScore = -10000;
+    int bestScore = -40000;
     Move bestMove;
 
-    MovesStruct legalMoves = game.moveGen.generateAllLegalMoves(game.board);
-    for (const Move& move : legalMoves.moveList) {
-        Game newGame = game;
-        newGame.makeMove(move);
-        int score = -alphabeta(-10000, 10000, 3, newGame);
+    static MovesStruct legalMoves;
+    legalMoves = game.moveGen.generateAllLegalMoves(game.board);
+    for (int i = 0; i < legalMoves.getNumMoves(); ++i) {
+        Move move = legalMoves.getMove(i);
+        game.pushMove(move);
+        int score = -alphabeta(-MATE_VALUE, MATE_VALUE, 4, game);
+        game.popMove();
+
         if (score > bestScore) {
             bestScore = score;
             bestMove = move;

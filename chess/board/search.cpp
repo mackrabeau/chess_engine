@@ -8,23 +8,25 @@ int alphabeta(int alpha, int beta, int depth, Game& game){
 
     // Generate legal moves
     MovesStruct legalMoves = game.moveGen.generateAllLegalMoves(game.board);
-    int maxScore = -10000;
     
     if (legalMoves.getNumMoves() == 0) {
         // If no legal moves, return a score based on whether the player is in check
-        return game.board.isInCheck() ? -10000 : 0; // Checkmate or stalemate
+        return game.board.isInCheck() ? -MATE_VALUE + depth : STALEMATE_VALUE; // Checkmate or stalemate
     }
 
+    int maxScore = -MATE_VALUE - 1; // worst possible score
+    
     for (int i = 0; i < legalMoves.getNumMoves(); ++i) {
-        Game newGame = game; // Create a copy of the game state
-        newGame.makeMove(legalMoves.getMove(i));
 
-        int score = -alphabeta(-beta, -alpha, depth - 1, newGame);
+        game.pushMove(legalMoves.getMove(i));
+        int score = -alphabeta(-beta, -alpha, depth - 1, game);
+        game.popMove(); // Undo the move
+
         maxScore = std::max(maxScore, score);
         alpha = std::max(alpha, score);
 
         if (alpha >= beta) {
-            break; // Beta cut-off
+            break; // Prune remaining moves
         }
     }
 

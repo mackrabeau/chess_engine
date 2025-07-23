@@ -15,19 +15,19 @@ int evaluateBoard(const Board& board) {
         enumPiece pieceType = board.getPieceType(square);
         switch (pieceType) {
             case nPawns:
-                board.getWhitePieces() & (1ULL << square) ? score += (Pwt + pawnTable[square]) : score -= (Pwt + pawnTable[square]); // Add pawn evaluation logic
+                board.getWhitePieces() & (1ULL << square) ? score += (Pwt + wpTable[square]) : score -= (Pwt + bpTable[square]); // Add pawn evaluation logic
                 break;
             case nKnights:
-                board.getWhitePieces() & (1ULL << square) ? score += (Nwt + knightTable[square]) : score -= (Nwt + knightTable[square]); // Add knight evaluation logic
+                board.getWhitePieces() & (1ULL << square) ? score += (Nwt + wnTable[square]) : score -= (Nwt + bnTable[square]); // Add knight evaluation logic
                 break;
             case nBishops:
-                board.getWhitePieces() & (1ULL << square) ? score += (Bwt + bishopTable[square]) : score -= (Bwt + bishopTable[square]); // Add bishop evaluation logic
+                board.getWhitePieces() & (1ULL << square) ? score += (Bwt + wbTable[square]) : score -= (Bwt + bbTable[square]); // Add bishop evaluation logic
                 break;
             case nRooks:
-                board.getWhitePieces() & (1ULL << square) ? score += (Rwt + rookTable[square]) : score -= (Rwt + rookTable[square]); // Add rook evaluation logic
+                board.getWhitePieces() & (1ULL << square) ? score += (Rwt + wrTable[square]) : score -= (Rwt + brTable[square]); // Add rook evaluation logic
                 break;
             case nQueens:
-                board.getWhitePieces() & (1ULL << square) ? score += (Qwt + queenTable[square]) : score -= (Qwt + queenTable[square]); // Add queen evaluation logic
+                board.getWhitePieces() & (1ULL << square) ? score += (Qwt + wqTable[square]) : score -= (Qwt + bqTable[square]); // Add queen evaluation logic
                 break;
             case nKings:
                 // temperary logic for king evaluation

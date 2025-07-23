@@ -5,17 +5,18 @@
 using namespace std;
 
 // doMove: modifies the board in place
-void Game::doMove(const Move& move) {
+void Game::pushMove(const Move& move) {
     // Save the current board state to history
     BoardState prev;
     memcpy(prev.pieceBB, board.pieceBB, 8 * sizeof(U64));
     prev.gameInfo = board.gameInfo;
     history.push_back(prev);
 
-    Board::applyMove(move, board.pieceBB, board.gameInfo, board);
+    board.applyMove(move, board.pieceBB, board.gameInfo, board);
+    updateGameState();
 }
 
-void Game::undoMove() {
+void Game::popMove() {
     if (history.empty()) return; // Nothing to undo
 
     BoardState prev = history.back();
@@ -23,6 +24,7 @@ void Game::undoMove() {
 
     memcpy(board.pieceBB, prev.pieceBB, 8 * sizeof(U64));
     board.gameInfo = prev.gameInfo;
+    updateGameState();
 }
 
 // makeMove: returns a new Board
@@ -31,7 +33,7 @@ Board Game::makeMove(const Move& move) {
     memcpy(newPieceBB, board.pieceBB, 8 * sizeof(U64));
     U16 newGameInfo = board.gameInfo;
 
-    Board::applyMove(move, newPieceBB, newGameInfo, board);
+    board.applyMove(move, newPieceBB, newGameInfo, board);
 
     return Board(newPieceBB, newGameInfo);
 }
@@ -41,7 +43,7 @@ Board Game::makeMove(Board& fromBoard, const Move& move) {
     memcpy(newPieceBB, fromBoard.pieceBB, 8 * sizeof(U64));
     U16 newGameInfo = fromBoard.gameInfo;
 
-    Board::applyMove(move, newPieceBB, newGameInfo, fromBoard);
+    board.applyMove(move, newPieceBB, newGameInfo, fromBoard);
 
     return Board(newPieceBB, newGameInfo);
 }

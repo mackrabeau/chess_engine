@@ -36,10 +36,10 @@ public:
         : board(initialFEN), moveGen(MoveTables::instance()) { updateGameState(); };
 
 
-    void doMove(const Move& move);
+    void pushMove(const Move& move);
     Board makeMove(const Move& move);
     Board makeMove(Board& fromBoard, const Move& move);
-    void undoMove();
+    void popMove();
 
     void updateGameState();
 
