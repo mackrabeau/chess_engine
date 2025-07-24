@@ -5,6 +5,36 @@ void MoveTables::init() {
     generateKnightMoves();
     generatePawnMoves();
     generateSlidingPieceMoves();
+
+    generateZobristTables();
+}
+
+void MoveTables::generateZobristTables() {
+    U64 seed = 1070372; // fixed seed for reproducibility
+
+    // piece-square hash values
+    for (int piece = 0; piece < 12; piece++) {
+        for (int square = 0; square < 64; square++) {
+            zobristTable[piece][square] = randomU64(seed);
+        }
+    }
+    // side to move hash
+    zobristSideToMove = randomU64(seed);
+
+    // castling rights hash (16 combos)
+    for (int i = 0; i < 16; i++) {
+        zobristCastling[i] = randomU64(seed);
+    }
+
+    // en passant files hash (8 files)
+    for (int i = 0; i < 8; i++) {
+        zobristEnPassant[i] = randomU64(seed);
+    }
+}
+
+U64 MoveTables::randomU64(U64& seed) {
+    seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+    return seed;
 }
 
 void MoveTables::generateKingMoves() {

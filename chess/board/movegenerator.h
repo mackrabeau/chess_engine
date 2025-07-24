@@ -46,7 +46,8 @@ public:
     U64 attackedBB(const Board& board, U8 enemyColour); // checks if square is attacked by enemy pieces
 
     Move readMove(U8 from, U8 to, const Board& board);  // returns move int
-    bool isLegal(U8 from, U8 to, Board& board);
+    // bool isLegal(const Move& move, Board& board); // checks if move is legal
+    bool isLegal(const U8 from, const U8 to, Board& board);
     void displayBitboard(U64 bitboard, int square, char symbol) const;
 
 };

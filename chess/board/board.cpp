@@ -69,6 +69,7 @@ Board::Board(const std::string& fen){
     //     // You can store this in a member variable if you want, but it's not needed for move legality.
     // }
 
+    calculateHash(); // Calculate the hash for the initial position
 };
 
 Board::Board(const Board& other){
@@ -76,11 +77,13 @@ Board::Board(const Board& other){
         pieceBB[i] = other.pieceBB[i];
     }
     gameInfo = other.gameInfo;
+    hash = other.hash;
 }
 
-Board::Board(U64 otherPieceBB[8], const U16& otherGameInfo){
+Board::Board(U64 otherPieceBB[8], const U16& otherGameInfo, const U64& otherHash) {
     memcpy(pieceBB, otherPieceBB, 8 * sizeof(U64));
     gameInfo = otherGameInfo;
+    hash = otherHash;
 }
 
 std::string Board::toString() const {
@@ -155,7 +158,7 @@ int Board::getEnPassantSquare() const {
     return (epRow * 8 + epCol);
 }
 
-void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget, const Board& board) {
+void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget, const Board& board, U64& hashTarget) {
 
     U8 from = move.getFrom(); // extract from square, mask to 6 bits
     U8 to = move.getTo(); // extract to square, mask to 6 bits
@@ -163,10 +166,27 @@ void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget,
 
     enumPiece piece = board.getPieceType(from);
     enumPiece colour = board.getColourType(from);
+    int pieceIdx = board.getPieceIndex(from);
+
+    MoveTables& tables = MoveTables::instance();
 
     // remove the piece from the "from" square
     pieceBBTarget[piece] &= ~(1ULL << from); 
     pieceBBTarget[colour] &= ~(1ULL << from);
+    hashTarget ^= tables.zobristTable[pieceIdx][from]; // update hash for piece removal
+
+    // clear old en passant from hash (if set)
+    if (gameInfoTarget & EP_IS_SET) {
+        int oldEpFile = (gameInfoTarget & EP_FILE_MASK) >> EP_FILE_SHIFT;
+        hashTarget ^= tables.zobristEnPassant[oldEpFile];
+    }
+
+    int oldCastlingIdx = 0;
+    if (gameInfoTarget & WK_CASTLE) oldCastlingIdx |= 1;
+    if (gameInfoTarget & WQ_CASTLE) oldCastlingIdx |= 2;
+    if (gameInfoTarget & BK_CASTLE) oldCastlingIdx |= 4;
+    if (gameInfoTarget & BQ_CASTLE) oldCastlingIdx |= 8;
+    hashTarget ^= tables.zobristCastling[oldCastlingIdx];
 
     // clear en passant square if not a double pawn push,
     // if the move is a double pawn push, set the en passant square later
@@ -177,34 +197,45 @@ void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget,
         if (move.isEPCapture()) {
             // determine the square behind the captured pawn and remove pawn from the board
             int enPassantSquare = (colour == nWhite) ? to - 8 : to + 8; 
+            int capturedPieceIdx = board.getPieceIndex(enPassantSquare);
+
             pieceBBTarget[nPawns] &= ~(1ULL << enPassantSquare);
             pieceBBTarget[(colour == nWhite ? nBlack : nWhite)] &= ~(1ULL << enPassantSquare);
+            hashTarget ^= tables.zobristTable[capturedPieceIdx][enPassantSquare];
 
         } else {
             // for all other captures, remove piece
             enumPiece capturedPiece = board.getPieceType(to);
             enumPiece capturedColour = board.getColourType(to);
+            int capturedPieceIdx = board.getPieceIndex(to);
 
             pieceBBTarget[capturedPiece] &= ~(1ULL << to);
             pieceBBTarget[capturedColour] &= ~(1ULL << to);
+            hashTarget ^= tables.zobristTable[capturedPieceIdx][to]; // update hash for captured piece
         }
     }
 
     if (move.isPromoCapture() || move.isPromotion()) {
         // handle promotion
         enumPiece promotedPiece = nQueens; // default to queen promotion
+        int promotedPieceIdx = (colour == nWhite) ? 4 : 10; // Queen index
+
+        // add promoted piece to bitboards and hash
         pieceBBTarget[promotedPiece] |= (1ULL << to);
+        hashTarget ^= tables.zobristTable[promotedPieceIdx][to];
+
 
     } else {
         // normal move, just update the target square
         pieceBBTarget[piece] |= (1ULL << to);
+        hashTarget ^= tables.zobristTable[pieceIdx][to];
 
         if (piece == nPawns) {
             if (abs((int)from - (int)to) == 16) {
                 // double pawn push
                 int file = to % 8; // get the file of the pawn
-                // set the en passant square
-                gameInfoTarget |= EP_IS_SET | ((file << EP_FILE_SHIFT) & EP_FILE_MASK);
+                gameInfoTarget |= EP_IS_SET | ((file << EP_FILE_SHIFT) & EP_FILE_MASK);    // set the en passant square
+                hashTarget ^= tables.zobristEnPassant[file];    // add new en passant square to hash
             }
         } 
     }
@@ -212,13 +243,55 @@ void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget,
     // add piece to the "to" square
     pieceBBTarget[colour] |= (1ULL << to);
 
+    // if castling, update the rook's position
+    if (move.isKingCastle() || move.isQueenCastle()) {
+        if (colour == nWhite) {
+            if (to == 2) { // queenside castle
+                pieceBBTarget[nRooks] &= ~(1ULL << 0); // remove a1 rook
+                pieceBBTarget[nRooks] |= (1ULL << 3); // add d1 rook
+                pieceBBTarget[nWhite] &= ~(1ULL << 0);
+                pieceBBTarget[nWhite] |= (1ULL << 3);
+
+                hashTarget ^= tables.zobristTable[nRooks][0]; // remove a1 rook from hash
+                hashTarget ^= tables.zobristTable[nRooks][3]; // add d1 rook to hash
+            } else if (to == 6) { // kingside castle
+                pieceBBTarget[nRooks] &= ~(1ULL << 7); // remove h1 rook
+                pieceBBTarget[nRooks] |= (1ULL << 5); //   add f1 rook     
+                pieceBBTarget[nWhite] &= ~(1ULL << 7);
+                pieceBBTarget[nWhite] |= (1ULL << 5);
+
+                hashTarget ^= tables.zobristTable[nRooks][7]; // remove h1 rook from hash
+                hashTarget ^= tables.zobristTable[nRooks][5]; // add f1
+            }
+        } else {
+            if (to == 58) { // queenside castle
+                pieceBBTarget[nRooks] &= ~(1ULL << 56); // remove a8 rook
+                pieceBBTarget[nRooks] |= (1ULL << 59); // add d8 rook
+                pieceBBTarget[nBlack] &= ~(1ULL << 56);
+                pieceBBTarget[nBlack] |= (1ULL << 59);    
+                
+                hashTarget ^= tables.zobristTable[nRooks][56]; // remove a8 rook from hash
+                hashTarget ^= tables.zobristTable[nRooks][59]; // add d8
+            } else if (to == 62) { // kingside castle
+                pieceBBTarget[nRooks] &= ~(1ULL << 63); // remove h8 rook
+                pieceBBTarget[nRooks] |= (1ULL << 61); // add f8 rook
+                pieceBBTarget[nBlack] &= ~(1ULL << 63);
+                pieceBBTarget[nBlack] |= (1ULL << 61);
+
+                hashTarget ^= tables.zobristTable[nRooks][63]; // remove h8 rook from hash
+                hashTarget ^= tables.zobristTable[nRooks][61]; // add f8
+            }
+        }
+    }   
+
+    // update halfmove clock
     if (move.isCapture() || piece == nPawns){
         gameInfoTarget &= ~MOVE_MASK; // reset halfmove clock
     } else {
         gameInfoTarget = (gameInfoTarget & ~MOVE_MASK) | (((((gameInfoTarget & MOVE_MASK) >> 6) + 1) << 6) & MOVE_MASK);
     }
 
-    // castling rights
+    // update castling rights
     if (piece == nKings) {
         // remove castling rights for the king
         if (colour == nWhite) {
@@ -236,38 +309,37 @@ void Board::applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget,
             if (from == 63) gameInfoTarget &= ~BK_CASTLE; // h8 rook
         }
     }
-    // if castling, update the rook's position
-    if (move.isKingCastle() || move.isQueenCastle()) {
-        if (colour == nWhite) {
-            if (to == 2) { // queenside castle
-                pieceBBTarget[nRooks] &= ~(1ULL << 0); // remove a1 rook
-                pieceBBTarget[nRooks] |= (1ULL << 3); // add d1 rook
-                pieceBBTarget[nWhite] &= ~(1ULL << 0);
-                pieceBBTarget[nWhite] |= (1ULL << 3);
-            } else if (to == 6) { // kingside castle
-                pieceBBTarget[nRooks] &= ~(1ULL << 7); // remove h1 rook
-                pieceBBTarget[nRooks] |= (1ULL << 5); //   add f1 rook     
-                pieceBBTarget[nWhite] &= ~(1ULL << 7);
-                pieceBBTarget[nWhite] |= (1ULL << 5);
-            }
-        } else {
-            if (to == 58) { // queenside castle
-                pieceBBTarget[nRooks] &= ~(1ULL << 56); // remove a8 rook
-                pieceBBTarget[nRooks] |= (1ULL << 59); // add d8 rook
-                pieceBBTarget[nBlack] &= ~(1ULL << 56);
-                pieceBBTarget[nBlack] |= (1ULL << 59);     
-            } else if (to == 62) { // kingside castle
-                pieceBBTarget[nRooks] &= ~(1ULL << 63); // remove h8 rook
-                pieceBBTarget[nRooks] |= (1ULL << 61); // add f8 rook
-                pieceBBTarget[nBlack] &= ~(1ULL << 63);
-                pieceBBTarget[nBlack] |= (1ULL << 61);
-            }
-        }
-    }   
 
-    gameInfoTarget ^= TURN_MASK;  // switch turns
+   // 9. Add new castling rights to hash
+    int newCastlingIdx = 0;
+    if (gameInfoTarget & WK_CASTLE) newCastlingIdx |= 1;
+    if (gameInfoTarget & WQ_CASTLE) newCastlingIdx |= 2;
+    if (gameInfoTarget & BK_CASTLE) newCastlingIdx |= 4;
+    if (gameInfoTarget & BQ_CASTLE) newCastlingIdx |= 8;
+    hashTarget ^= tables.zobristCastling[newCastlingIdx];
+
+    // switch turns
+    gameInfoTarget ^= TURN_MASK;  
+    hashTarget ^= tables.zobristSideToMove; // update hash for side to move
 }
 
+
+// Helper function to map pieces to zobrist indices
+int Board::getPieceIndex(int square) const {
+    enumPiece piece = getPieceType(square);
+    enumPiece color = getColourType(square);
+    
+    // Map to 0-11 range
+    switch(piece) {
+        case nPawns:   return (color == nWhite) ? 0 : 6;
+        case nRooks:   return (color == nWhite) ? 1 : 7;
+        case nKnights: return (color == nWhite) ? 2 : 8;
+        case nBishops: return (color == nWhite) ? 3 : 9;
+        case nQueens:  return (color == nWhite) ? 4 : 10;
+        case nKings:   return (color == nWhite) ? 5 : 11;
+        default: return -1;
+    }
+}
 
 bool Board::isInCheck() const {
     return isInCheck(friendlyColour());
@@ -295,6 +367,44 @@ bool Board::isInCheck(U8 colour) const {
 
     // If the king's square is attacked, return true
     return (kingBB & attacked) != 0;
+}
+
+// zobrist hash function
+void Board::calculateHash(){
+    MoveTables &moveTables = MoveTables::instance();
+    hash = 0ULL; // reset hash
+
+    // hash pieces on the board 
+    U64 pieces = getAllPieces();
+    while (pieces) {
+        int square = __builtin_ctzll(pieces);  // get the least significant set bit
+        pieces &= pieces - 1;                  // remove the least significant set bit
+
+        enumPiece piece = getPieceType(square);
+        if (piece != nEmpty) {
+            enumPiece colour = getColourType(square);
+            int pieceIdx = piece + (colour == nWhite ? 0 : 6); // 0-5 for white, 6-11 for black
+            hash ^= moveTables.zobristTable[pieceIdx][square];
+        }
+    }
+
+    if (!(gameInfo & TURN_MASK)) { // black to move
+        hash ^= moveTables.zobristSideToMove; // XOR for black to move
+    }
+
+    // castling rights
+    int castlingIdx = 0;
+    if (gameInfo & WK_CASTLE) castlingIdx |= 1;
+    if (gameInfo & WQ_CASTLE) castlingIdx |= 2;
+    if (gameInfo & BK_CASTLE) castlingIdx |= 4;
+    if (gameInfo & BQ_CASTLE) castlingIdx |= 8;
+    hash ^= moveTables.zobristCastling[castlingIdx];
+
+    // en passant file;
+    if (gameInfo & EP_IS_SET) {
+        int epFile = (gameInfo & EP_FILE_MASK) >> EP_FILE_SHIFT;
+        hash ^= moveTables.zobristEnPassant[epFile];
+    }
 }
 
 void Board::clearBoard(){

@@ -10,9 +10,10 @@ void Game::pushMove(const Move& move) {
     BoardState prev;
     memcpy(prev.pieceBB, board.pieceBB, 8 * sizeof(U64));
     prev.gameInfo = board.gameInfo;
+    prev.hash = board.hash; // save the hashs
     history.push_back(prev);
 
-    board.applyMove(move, board.pieceBB, board.gameInfo, board);
+    board.applyMove(move, board.pieceBB, board.gameInfo, board, board.hash);
     updateGameState();
 }
 
@@ -24,6 +25,7 @@ void Game::popMove() {
 
     memcpy(board.pieceBB, prev.pieceBB, 8 * sizeof(U64));
     board.gameInfo = prev.gameInfo;
+    board.hash = prev.hash; // restore the hash
     updateGameState();
 }
 
@@ -33,9 +35,9 @@ Board Game::makeMove(const Move& move) {
     memcpy(newPieceBB, board.pieceBB, 8 * sizeof(U64));
     U16 newGameInfo = board.gameInfo;
 
-    board.applyMove(move, newPieceBB, newGameInfo, board);
+    board.applyMove(move, newPieceBB, newGameInfo, board, board.hash);
 
-    return Board(newPieceBB, newGameInfo);
+    return Board(newPieceBB, newGameInfo, board.hash);
 }
 
 Board Game::makeMove(Board& fromBoard, const Move& move) {
@@ -43,9 +45,9 @@ Board Game::makeMove(Board& fromBoard, const Move& move) {
     memcpy(newPieceBB, fromBoard.pieceBB, 8 * sizeof(U64));
     U16 newGameInfo = fromBoard.gameInfo;
 
-    board.applyMove(move, newPieceBB, newGameInfo, fromBoard);
+    board.applyMove(move, newPieceBB, newGameInfo, fromBoard, fromBoard.hash);
 
-    return Board(newPieceBB, newGameInfo);
+    return Board(newPieceBB, newGameInfo, fromBoard.hash);
 }
 
 GameState Game::returnGameState(Board& board){

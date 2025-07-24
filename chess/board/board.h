@@ -17,10 +17,11 @@ class Board {
 public:
     U64 pieceBB[8];
     U16 gameInfo;
+    U64 hash;
 
     Board(const std::string& fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); 
     Board(const Board& other);
-    Board(U64 otherPieceBB[8], const U16& otherGameInfo);
+    Board(U64 otherPieceBB[8], const U16& otherGameInfo, const U64& otherHash);
     std::string toString() const; // FEN representation
 
     int getEnPassantSquare() const;
@@ -58,13 +59,14 @@ public:
 
     char pieceToChar(int square) const;
 
-
     bool isInCheck() const; // check if the current player's king is in check
     bool isInCheck(U8 colour) const; // check if the specified player's king is in check
 
+    static void applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget, const Board& board, U64& hashTarget);
 
-    static void applyMove(const Move& move, U64* pieceBBTarget, U16& gameInfoTarget, const Board& board);
-
+    int getPieceIndex(int square) const; // get the zobrist index for a piece at a square
+    U64 getHash() const { return hash; }
+    void calculateHash(); // calculate the hash for the current board state
 
 private:
 

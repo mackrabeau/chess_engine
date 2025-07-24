@@ -94,8 +94,11 @@ MovesStruct MoveGenerator::generateAllLegalMoves(const Board& board){
     U8 justMovedColour = board.friendlyColour();
     for (short i = 0; i < pseudoMoves.count; i++) {
         Move move = pseudoMoves.moveList[i];
+
+        // change this !!!!
+        
         Board tempBoard = board; // Create a temporary board to test moves
-        Board::applyMove(move, tempBoard.pieceBB, tempBoard.gameInfo, tempBoard);
+        Board::applyMove(move, tempBoard.pieceBB, tempBoard.gameInfo, tempBoard, tempBoard.hash);
         if (!tempBoard.isInCheck(justMovedColour)) {
             legalMoves.addMove(move);
         }
@@ -120,25 +123,53 @@ void MoveGenerator::generateKingMovesForSquare(const Board& board, int square, M
 
     U64 movesBB = tables.kingBB[square];
     U64 attacked = attackedBB(board, board.enemyColour()); // get attacked squares by enemy pieces
-    U64 empty = ~(board.pieceBB[nWhite] | board.pieceBB[nBlack]); // all empty squares
+    U64 occupied = board.pieceBB[nWhite] | board.pieceBB[nBlack]; // all occupied squares
 
     // White king on e1 (square 4)
     if (board.friendlyColour() == nWhite && square == 4) {
-        if ((board.gameInfo & WK_CASTLE) && !(attacked & WK_CASTLE_MASK) && !(empty & WK_CASTLE_MASK)) {
-            movesBB |= (1ULL << 6); // g1
+        // Kingside castle (e1-g1)
+        if ((board.gameInfo & WK_CASTLE)) {
+            U64 kingSideSquares = (1ULL << 5) | (1ULL << 6); // f1, g1
+            U64 kingSideCheck = (1ULL << 4) | (1ULL << 5) | (1ULL << 6); // e1, f1, g1
+            
+            // Check: squares between king and rook are empty AND not attacked
+            if (!(occupied & kingSideSquares) && !(attacked & kingSideCheck)) {
+                movesBB |= (1ULL << 6); // Add g1 as valid move
+            }
         }
-        if ((board.gameInfo & WQ_CASTLE) && !(attacked & WQ_CASTLE_MASK) && !(empty & WQ_CASTLE_MASK)) {
-            movesBB |= (1ULL << 2); // c1
+        
+        // Queenside castle (e1-c1)
+        if ((board.gameInfo & WQ_CASTLE)) {
+            U64 queenSideEmpty = (1ULL << 1) | (1ULL << 2) | (1ULL << 3); // b1, c1, d1
+            U64 queenSideCheck = (1ULL << 2) | (1ULL << 3) | (1ULL << 4); // c1, d1, e1
+            
+            // Check: squares between king and rook are empty AND king path not attacked
+            if (!(occupied & queenSideEmpty) && !(attacked & queenSideCheck)) {
+                movesBB |= (1ULL << 2); // Add c1 as valid move
+            }
         }
     }
 
     // Black king on e8 (square 60)
     else if (board.friendlyColour() == nBlack && square == 60) {
-        if ((board.gameInfo & BK_CASTLE) && !(attacked & BK_CASTLE_MASK) && !(empty & BK_CASTLE_MASK)) {
-            movesBB |= (1ULL << 62); // g8
+        // Kingside castle (e8-g8)
+        if ((board.gameInfo & BK_CASTLE)) {
+            U64 kingSideSquares = (1ULL << 61) | (1ULL << 62); // f8, g8
+            U64 kingSideCheck = (1ULL << 60) | (1ULL << 61) | (1ULL << 62); // e8, f8, g8
+            
+            if (!(occupied & kingSideSquares) && !(attacked & kingSideCheck)) {
+                movesBB |= (1ULL << 62); // Add g8 as valid move
+            }
         }
-        if ((board.gameInfo & BQ_CASTLE) && !(attacked & BQ_CASTLE_MASK) && !(empty & BQ_CASTLE_MASK)) {
-            movesBB |= (1ULL << 58); // c8
+        
+        // Queenside castle (e8-c8)
+        if ((board.gameInfo & BQ_CASTLE)) {
+            U64 queenSideEmpty = (1ULL << 57) | (1ULL << 58) | (1ULL << 59); // b8, c8, d8
+            U64 queenSideCheck = (1ULL << 58) | (1ULL << 59) | (1ULL << 60); // c8, d8, e8
+            
+            if (!(occupied & queenSideEmpty) && !(attacked & queenSideCheck)) {
+                movesBB |= (1ULL << 58); // Add c8 as valid move
+            }
         }
     }
     addMovesToStruct(pseudoMoves, board, square, movesBB);
@@ -247,7 +278,11 @@ void MoveGenerator::addMovesToStruct(MovesStruct& moves, const Board& board, int
     }
 }
 
-bool MoveGenerator::isLegal(U8 from, U8 to, Board& board) {
+// bool MoveGenerator::isLegal(const Move& move, Board& board){
+//     return isLegal(move.getFrom(), move.getTo(), board);
+// }
+
+bool MoveGenerator::isLegal(const U8 from, const U8 to, Board& board) {
     // Basic validation
     enumPiece pieceType = board.getPieceType(from);
     if (pieceType == nEmpty) return false;
@@ -272,7 +307,7 @@ bool MoveGenerator::isLegal(U8 from, U8 to, Board& board) {
     // If move is in pseudo-legal moves, check if it leaves king in check
     Move move = readMove(from, to, board);
     Board tempBoard = board;
-    Board::applyMove(move, tempBoard.pieceBB, tempBoard.gameInfo, tempBoard);
+    Board::applyMove(move, tempBoard.pieceBB, tempBoard.gameInfo, tempBoard, tempBoard.hash);
     
     return !tempBoard.isInCheck(board.friendlyColour());
 }

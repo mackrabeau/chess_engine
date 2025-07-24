@@ -14,6 +14,7 @@
 struct BoardState {
     U64 pieceBB[8];
     U16 gameInfo;
+    U64 hash;
 };
 
 enum GameState {
@@ -35,6 +36,11 @@ public:
     Game(const std::string& initialFEN) 
         : board(initialFEN), moveGen(MoveTables::instance()) { updateGameState(); };
 
+    void reset(){
+        board = Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); // Reset to initial state
+        updateGameState();
+    }
+
 
     void pushMove(const Move& move);
     Board makeMove(const Move& move);
@@ -49,6 +55,7 @@ public:
     bool isThreefoldRepetition() const {return false;};
     bool isFiftyMoveRule() const {return false;};
     bool isInsufficientMaterial() const {return false;};
+
 
 
 private:
