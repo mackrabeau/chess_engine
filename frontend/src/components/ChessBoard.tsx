@@ -39,21 +39,26 @@ function ChessBoard() {
     //   }
     // }
 
-    async function getBestMove(currentPosition: string) {
+    async function getBestMove() {
       if (isGameOver || isLoading) return;
 
       try {
           const response = await fetch('http://localhost:3001/api/getBestMove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen: currentPosition}),
         });
 
         const data = await response.json();
+
+        if (!response.ok) {
+            console.error('API Error:', data);
+            throw new Error(data.message || data.error || 'Unknown error');
+        }
+        
         return data.bestMove; // example: "e2e4"
 
       } catch (err) {
-        console.error("Engine error:", err);
+        console.error("getBestMove failed:", err);
       }
     }
 
@@ -67,12 +72,25 @@ function ChessBoard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             fen: currentPosition,
-            from,
-            to, 
+            from, 
+            to 
           }),
         });
 
         const data = await response.json();
+
+        if (!response.ok) {
+          console.error('Move API Error:', data);
+          // Remove alert - just log and return failure
+          return {success: false, newPosition: null};
+        }
+
+        // Check if engine returned an error (illegal move)
+        if (data.newPosition && data.newPosition.startsWith("error:")) {
+          console.log('Illegal move attempted:', data.newPosition);
+          // No alert - just silently reject the move
+          return {success: false, newPosition: null};
+        }
 
         if (data.newPosition) {
           setPosition(data.newPosition);
@@ -131,10 +149,10 @@ function ChessBoard() {
             // if (randomMove) {
             //   await makeMove(randomMove, result.newPosition);
             // }
-            const bestMove = await getBestMove(result.newPosition);
+            const bestMove = await getBestMove();
 
             if (bestMove) {
-              await makeMove(bestMove, result.newPosition);
+              await makeMove(bestMove);
             }
 
           }
