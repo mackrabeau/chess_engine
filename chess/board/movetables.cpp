@@ -5,7 +5,6 @@ void MoveTables::init() {
     generateKnightMoves();
     generatePawnMoves();
     generateSlidingPieceMoves();
-
     generateZobristTables();
 }
 

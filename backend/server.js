@@ -9,10 +9,11 @@ const PORT = 3001;
 
 
 class ChessEngine{
-  constructor(ennginePath) {
+  constructor(enginePath) {
     this.engine = spawn(enginePath);
     this.pendingRequests = new Map();
     this.requestId = 0;
+    this.currentDepth = 0;
 
     console.log("Engine Started...");
 
@@ -23,10 +24,35 @@ class ChessEngine{
     });
     
     this.engine.stderr.on('data', (data) => {
-      console.log("Engine Error:", data.toString());
-    });
+        const message = data.toString().trim();
+        // console.log(`Raw stderr: "${message}"`);
         
-    this.engine.on('close', (code) => {
+        // Filter out search stats, engine info, and debug messages
+        if (message.startsWith('STATS:') || 
+            message.startsWith('Engine Info:') ||
+            message.startsWith('TT initialized:') ||
+            message.startsWith('DEPTH:') ||
+            message.startsWith('Current Search Depth:') ||
+            message.startsWith('=== ') ||  // Debug section headers
+            message.startsWith('Available moves:') ||
+            message.startsWith('Move ') ||
+            message.startsWith('Static evaluation:') ||
+            message.startsWith('Quiescence result:') ||
+            message.startsWith('Difference:') ||
+            message.startsWith('Available captures:') ||
+            message.startsWith('Capture ') ||
+            message.startsWith('After sorting:') ||
+            message.startsWith('Found move:') ||
+            message.startsWith('Eval before:') ||
+            message.startsWith('Eval after:') ||
+            message.startsWith('Change:') ||
+            message.includes('Search depth') ||
+            message.match(/^\d+$/)) { // Single numbers (likely depth indicators)
+            console.log(`Engine Info: ${message}`);
+        } else {
+            console.error(`Engine Error: ${message}`);
+        }
+    });    this.engine.on('close', (code) => {
         console.log('Engine process exited with code:', code);
     });
     
@@ -41,13 +67,13 @@ class ChessEngine{
         const fullCommand = `${id} ${command}`;
         console.log('Sending to engine:', fullCommand);
         
-        // Timeout after 30 seconds
+        // Timeout after 60 seconds
         const timeout = setTimeout(() => {
             if (this.pendingRequests.has(id)) {
                 this.pendingRequests.delete(id);
                 reject(new Error('Engine timeout'));
             }
-        }, 30000);
+        },  60000);
 
         this.pendingRequests.set(id, {
             resolve: (result) => {
@@ -86,7 +112,8 @@ class ChessEngine{
 
   // Convenience methods
   async getBestMove() {
-      return this.sendCommand(`best`);
+    this.currentDepth = 0; // Reset depth before each search
+    return this.sendCommand(`best`);
   }
   
   async makeMove(move) {
@@ -96,9 +123,22 @@ class ChessEngine{
   async getGameState() {
       return this.sendCommand(`state`);
   }
+
+  async getEval(){
+    return this.sendCommand('eval');
+  }
+
+  async getPosition(){
+    return this.sendCommand('position');
+  }
   
   async reset() {
-      return this.sendCommand('reset');
+    this.currentDepth = 0; // Reset depth tracking
+    return this.sendCommand('reset');
+  }
+
+  getCurrentDepth() {
+    return this.currentDepth;
   }
   
   shutdown() {
@@ -109,6 +149,7 @@ class ChessEngine{
       }, 1000);
   }
 }
+
 
 // initialize the chess engines
 const enginePath = path.join(__dirname, 'engine', 'engine'); // compiled C++ executable
@@ -153,7 +194,7 @@ app.post('/api/getBestMove', async (req, res) => {
 });
 
 app.post('/api/makeMove', async (req, res) => {
-    const { from, to } = req.body;
+    const { from, to, promoPiece } = req.body;
 
     if (!from || !to) {
         return res.status(400).json({
@@ -161,7 +202,7 @@ app.post('/api/makeMove', async (req, res) => {
         });
     }
     
-    const move = from + to;
+    const move = from + to + promoPiece;
     
     try {
         console.log("Making move:", move);
@@ -217,6 +258,44 @@ app.post('/api/reset', async (req, res) => {
     }
 });
 
+app.post('/api/getEval', async (req, res) => {
+    try {
+        console.log("Requesting position evaluation...");
+        const evaluation = await chessEngine.sendCommand('eval');
+        console.log("Evaluation returned:", evaluation);
+        
+        // Parse the evaluation number from the response
+        const evalValue = parseInt(evaluation) || 0;
+        
+        res.json({ evaluation: evalValue });
+    } catch (error) {
+        handleEngineError(error, res, 'getEval');
+    }
+});
+
+// Get current position from engine
+app.post('/api/getPosition', async (req, res) => {
+    try {
+        console.log("Requesting current position...");
+        const position = await chessEngine.getPosition();
+        console.log("Engine returned position:", position);
+        
+        res.json({ position: position });
+    } catch (error) {
+        handleEngineError(error, res, 'getPosition');
+    }
+});
+
+// Get current search depth
+app.get('/api/searchDepth', (req, res) => {
+    try {
+        const depth = chessEngine.getCurrentDepth();
+        res.json({ depth });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get search depth' });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ 
@@ -258,3 +337,4 @@ app.use((error, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
+

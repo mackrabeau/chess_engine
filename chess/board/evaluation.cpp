@@ -13,54 +13,54 @@ int evaluateBoard(const Board& board) {
         pieces &= pieces - 1;                  // remove the least significant set bit
 
         enumPiece pieceType = board.getPieceType(square);
+        enumPiece pieceColour = board.getColourType(square);
+
         switch (pieceType) {
             case nPawns:
-                board.getWhitePieces() & (1ULL << square) ? score += (Pwt + wpTable[square]) : score -= (Pwt + bpTable[square]); // Add pawn evaluation logic
+                pieceColour == nWhite ? score += wpTable[square] : score -= bpTable[square]; // Add pawn evaluation logic
                 break;
             case nKnights:
-                board.getWhitePieces() & (1ULL << square) ? score += (Nwt + wnTable[square]) : score -= (Nwt + bnTable[square]); // Add knight evaluation logic
+                pieceColour == nWhite ? score += wnTable[square] : score -= bnTable[square]; // Add knight evaluation logic
                 break;
             case nBishops:
-                board.getWhitePieces() & (1ULL << square) ? score += (Bwt + wbTable[square]) : score -= (Bwt + bbTable[square]); // Add bishop evaluation logic
+                pieceColour == nWhite ? score += wbTable[square] : score -= bbTable[square]; // Add bishop evaluation logic
                 break;
             case nRooks:
-                board.getWhitePieces() & (1ULL << square) ? score += (Rwt + wrTable[square]) : score -= (Rwt + brTable[square]); // Add rook evaluation logic
+                pieceColour == nWhite ? score += wrTable[square] : score -= brTable[square]; // Add rook evaluation logic
                 break;
             case nQueens:
-                board.getWhitePieces() & (1ULL << square) ? score += (Qwt + wqTable[square]) : score -= (Qwt + bqTable[square]); // Add queen evaluation logic
+                pieceColour == nWhite ? score += wqTable[square] : score -= bqTable[square]; // Add queen evaluation logic
                 break;
             case nKings:
-                // temperary logic for king evaluation
-                // In a real evaluation, you would want to consider king safety, control of the center
-                board.getWhitePieces() & (1ULL << square) ? score += Kwt : score -= Kwt; // King is usually not counted in material, but can be evaluated for safety
-                score += 0; // King table evaluation can be added later
+                pieceColour == nWhite ? score += wkMidTable[square] : score -= bkMidTable[square]; // Add king evaluation logic
                 break;
             default:
                 break;
         }
     }
 
-    return score;
+    return score + materialScore(board);
+
+    // int v = score + materialScore(board);
+    // return (board.gameInfo & 1) ? v : -v; // if black to move, invert scores
 }
 
 // dont use for now
-int material_score(const Board& board) {
+int materialScore(const Board& board) {
+    
     int score = 0;
 
-    // Add material values for each piece type
     score += __builtin_popcountll(board.getWhitePawns()) * Pwt;   // Pawns
     score += __builtin_popcountll(board.getWhiteKnights()) * Nwt; // Knights
     score += __builtin_popcountll(board.getWhiteBishops()) * Bwt; // Bishops
     score += __builtin_popcountll(board.getWhiteRooks()) * Rwt;   // Rooks
     score += __builtin_popcountll(board.getWhiteQueens()) * Qwt;  // Queens
-    score += __builtin_popcountll(board.getWhiteKing()) * Kwt;    // King (not usually counted, but for completeness)
 
     score -= __builtin_popcountll(board.getBlackPawns()) * Pwt;
     score -= __builtin_popcountll(board.getBlackKnights()) * Nwt;
     score -= __builtin_popcountll(board.getBlackBishops()) * Bwt;
     score -= __builtin_popcountll(board.getBlackRooks()) * Rwt;
     score -= __builtin_popcountll(board.getBlackQueens()) * Qwt;
-    score -= __builtin_popcountll(board.getBlackKing()) * Kwt;
 
     return score;
 }

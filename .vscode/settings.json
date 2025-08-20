@@ -62,6 +62,7 @@
         "compare": "cpp",
         "concepts": "cpp",
         "algorithm": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "iomanip": "cpp"
     }
 }
