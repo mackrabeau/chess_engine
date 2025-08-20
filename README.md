@@ -12,6 +12,8 @@ A full-stack chess engine implementation featuring a C++ backend with alpha-beta
   - En passant captures
   - Pawn promotion (all piece types)
   - Check, checkmate, and stalemate detection
+  - Threefold repetition detection
+  - 50-move rule implementation
 - **FEN string parsing** and generation
 - **Performance testing** with perft functionality
 - **Binary move representation** with detailed visualization
@@ -23,6 +25,10 @@ A full-stack chess engine implementation featuring a C++ backend with alpha-beta
 - **En passant square highlighting** for debugging
 - **Binary move display** showing internal move representation
 - **Game state tracking** (ongoing, checkmate, stalemate, draws)
+- **Evaluation bar** showing current position strength
+- **Move history** with notation and evaluation scores
+- **Responsive layout** that works on different screen sizes
+- **"Thinking..." indicator** while the engine searches
 
 ## 📁 Project Structure
 
@@ -80,7 +86,7 @@ g++ -std=c++11 game.cpp board.cpp movegenerator.cpp movetables.cpp search.cpp ev
 
 Compile the performance tester (optional):
 ```bash
-g++ -std=c++11 game.cpp board.cpp movegenerator.cpp movetables.cpp search.cpp evaluation.cpp perft.cpp -o ../../backend/engine/perft
+g++ -std=c++11 game.cpp board.cpp movegenerator.cpp movetables.cpp search.cpp evaluation.cpp perft.cpp -o perft
 ```
 
 ### Setup Backend API
@@ -117,7 +123,6 @@ The web interface will be available at `http://localhost:5173`
 - Open your browser to the frontend URL
 - Make moves by dragging pieces on the board
 - The engine will respond with its best move
-- Watch the binary move representation update in real-time
 
 ## 🔧 API Endpoints
 
@@ -166,42 +171,75 @@ Moves are encoded as 16-bit integers:
 
 ### Search Algorithm
 - **Alpha-beta pruning** with configurable depth
-- **Move ordering** for better pruning efficiency
+- **Move ordering** for better pruning efficiency (MVV-LVA, killer moves)
 - **Quiescence search** for tactical positions
 - **Iterative deepening** for time management
+- **Transposition tables** for storing and reusing previous search results
+- **Time-based search cutoff** for responsive play
 
 ## 🎯 Future Improvements
 
 - [ ] **Opening book** integration
 - [ ] **Endgame tablebase** support
-- [ ] **Transposition tables** for faster search
 - [ ] **UCI protocol** compatibility
-- [ ] **Time management** and tournament play
 - [ ] **Position evaluation** improvements
 - [ ] **Parallel search** with multiple threads
 
 ## 🎮 Usage Examples
 
-### Engine Commands
+### Running the Engine
+
+First, compile and start the engine:
 ```bash
-# Get a random move for the starting position
-./engine random "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+cd chess/board
+g++ -std=c++11 -o engine [source files]
+./engine
+```
 
-# Get the best move
-./engine best "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+The engine accepts commands via standard input. Each command starts with a request ID (any number) followed by the command and its parameters.
 
-# Make a move
-./engine move "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" "e2e4"
+### Basic Commands
+```bash
+# Set a position using FEN notation
+1 engine set_position rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq - 0 1
 
-# Check game state
-./engine state "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+# Get the best move for current position
+2 engine best
+
+# Make a move (from e2 to e4)
+3 engine move e2e4
+
+# Check current game state (ongoing, checkmate, draws, etc.)
+4 engine state
+
+# Get current position evaluation
+5 engnine eval
+
+# Get current position as FEN string
+6 engine position
+
+# Reset to starting position
+7 engine reset
+
+# Display board in terminal
+8 engine print
+
+# Quit the engine
+9 engine quit
+```
+
+### Debug Commands
+```bash
+# Get transposition table statistics
+10 engine tt_stats
+
+# Debug best move evaluation
+11 engine debug_best_move
 ```
 
 ## 🐛 Known Issues
 
-- Promotion currently defaults to Queen (user choice not implemented)
-- No support for draw by repetition detection yet
-- Time controls not implemented for tournament play
+- Promotion supports piece selection ('n', 'b', 'r', 'q') but defaults to Queen in UI
 
 ---
 
