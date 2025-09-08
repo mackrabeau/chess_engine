@@ -1,6 +1,10 @@
 #include "evaluation.h"
+#include <array>
+#include <cmath>
 
-// simplified evaluation function
+namespace evaluation {
+
+const int INIT_TOTAL = Pwt * 16 + Nwt * 4 + Bwt * 4 + Rwt * 4 + Qwt * 2;
 
 int evaluateBoard(const Board& board) {
 
@@ -45,7 +49,6 @@ int evaluateBoard(const Board& board) {
     // return (board.gameInfo & 1) ? v : -v; // if black to move, invert scores
 }
 
-// dont use for now
 int materialScore(const Board& board) {
     
     int score = 0;
@@ -65,3 +68,62 @@ int materialScore(const Board& board) {
     return score;
 }
 
+
+std::vector<float> piecePlanes(const Board& board) {
+    std::vector<float> output;
+    output.reserve(12 * 64); // 12 planes (6 pieces, 2 colours) for each of the 64 squares
+
+    auto push_plane = [&](U64 pieceBB) {
+        for (int sq = 0; sq < 64; ++sq) {
+            output.push_back((pieceBB & (1ULL << sq)) ? 1.0f : 0.0f);
+        }
+    };
+
+    // white planes
+    push_plane(board.getWhitePawns());
+    push_plane(board.getWhiteKnights());
+    push_plane(board.getWhiteBishops());
+    push_plane(board.getWhiteRooks());
+    push_plane(board.getWhiteQueens());
+    push_plane(board.getWhiteKing());
+
+    // black planes
+    push_plane(board.getBlackPawns());
+    push_plane(board.getBlackKnights());
+    push_plane(board.getBlackBishops());
+    push_plane(board.getBlackRooks());
+    push_plane(board.getBlackQueens());
+    push_plane(board.getBlackKing());
+
+    return output;
+}
+
+// heuristic to compute what phase the game is in, normalized [0.. 1]
+// 1 is opening, 0 is endgame
+float computePhase(const Board& board) {
+
+    int white_sum =
+        __builtin_popcountll(board.getWhitePawns()) * Pwt +
+        __builtin_popcountll(board.getWhiteKnights()) * Nwt +
+        __builtin_popcountll(board.getWhiteBishops()) * Bwt +
+        __builtin_popcountll(board.getWhiteRooks()) * Rwt +
+        __builtin_popcountll(board.getWhiteQueens()) * Qwt;
+
+    int black_sum =
+        __builtin_popcountll(board.getBlackPawns()) * Pwt +
+        __builtin_popcountll(board.getBlackKnights()) * Nwt +
+        __builtin_popcountll(board.getBlackBishops()) * Bwt +
+        __builtin_popcountll(board.getBlackRooks()) * Rwt +
+        __builtin_popcountll(board.getBlackQueens()) * Qwt;
+
+    int total = white_sum + black_sum;
+    float phase = (float)total / (float)INIT_TOTAL;
+    if (phase < 0.0f) phase = 0.0f;
+    if (phase > 1.0f) phase = 1.0f;
+    return phase;
+}
+
+
+
+
+}
