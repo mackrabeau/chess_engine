@@ -48,7 +48,7 @@ public:
     GameState state;
     bool inMoveGeneration = false; 
     
-    Game(const std::string& initialFEN) 
+    Game(const std::string& initialFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") 
         : 
         tables(MoveTables::instance()),
         board(initialFEN), 

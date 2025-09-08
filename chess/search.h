@@ -17,15 +17,15 @@ extern std::chrono::steady_clock::time_point g_searchStartTime;
 extern long g_timeLimit;
 
 const int MAX_SEARCH_DEPTH = 50;
-
 extern Move killerMoves[MAX_SEARCH_DEPTH][2];
-
 
 // record search tree for debugging
 extern std::vector<std::string> g_searchTree;
 extern int g_currentPly;
 extern bool g_recordSearchTree;
 extern size_t g_searchTreeMaxLines;
+
+using namespace evaluation;
 
 void startSearchTree();
 void stopAndPrintSearchTree(size_t maxLines = 100000);
